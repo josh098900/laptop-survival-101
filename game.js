@@ -5,7 +5,7 @@ const ctx = canvas.getContext("2d");
 // Game state
 let game = {
     player: { x: 2, y: 2, laptopOpen: true },
-    lecturer: { x: 0, y: 0, speed: 0.02 },
+    lecturer: { x: 0, y: 0, speed: 0.015, targetX: null, targetY: null }, // Reduced from 0.02 to 0.015
     score: 0,
     timeLeft: 180, // 3 minutes in seconds
     desks: [],
@@ -13,7 +13,7 @@ let game = {
     npcs: [],
     distractionCooldown: 0,
     mashCount: 0,
-    lecturerCooldown: 0 // Cooldown after closing laptop
+    lecturerCooldown: 0
 };
 
 // Grid settings
@@ -40,6 +40,20 @@ game.npcs.forEach(npc => {
     game.desks[npc.y][npc.x].occupied = true;
     game.desks[npc.y][npc.x].hasLaptop = npc.laptopOpen;
 });
+
+// Function to pick a random empty spot
+function getRandomEmptySpot() {
+    const emptySpots = [];
+    for (let y = 0; y < GRID_HEIGHT; y++) {
+        for (let x = 0; x < GRID_WIDTH; x++) {
+            if (!game.desks[y][x].occupied) {
+                emptySpots.push({ x, y });
+            }
+        }
+    }
+    if (emptySpots.length === 0) return { x: 0, y: 0 }; // Fallback
+    return emptySpots[Math.floor(Math.random() * emptySpots.length)];
+}
 
 // Draw the scene
 function drawScene() {
@@ -80,19 +94,36 @@ function update() {
     if (game.gameOver) return;
 
     // Lecturer movement
-    let targetX = game.player.x;
-    let targetY = game.player.y;
+    let targetX, targetY;
     if (game.distractionCooldown > 0) {
         const distractedNPC = game.npcs.find(npc => npc.laptopOpen);
         if (distractedNPC) {
             targetX = distractedNPC.x;
             targetY = distractedNPC.y;
+            game.lecturer.targetX = null; // Clear retreat target during distraction
+            game.lecturer.targetY = null;
         }
         game.distractionCooldown -= 1 / 60;
         if (game.distractionCooldown <= 0) {
             document.getElementById("message").textContent = "";
         }
+    } else if (game.player.laptopOpen) {
+        // Chase player if laptop is open
+        targetX = game.player.x;
+        targetY = game.player.y;
+        game.lecturer.targetX = null; // Clear retreat target
+        game.lecturer.targetY = null;
+    } else {
+        // If laptop is closed, move to or stay at retreat target
+        if (game.lecturer.targetX === null || (Math.abs(game.lecturer.x - game.lecturer.targetX) < 0.1 && Math.abs(game.lecturer.y - game.lecturer.targetY) < 0.1)) {
+            const retreatSpot = getRandomEmptySpot();
+            game.lecturer.targetX = retreatSpot.x;
+            game.lecturer.targetY = retreatSpot.y;
+        }
+        targetX = game.lecturer.targetX;
+        targetY = game.lecturer.targetY;
     }
+
     if (game.lecturer.x < targetX) game.lecturer.x += game.lecturer.speed;
     if (game.lecturer.x > targetX) game.lecturer.x -= game.lecturer.speed;
     if (game.lecturer.y < targetY) game.lecturer.y += game.lecturer.speed;
@@ -108,8 +139,12 @@ function update() {
         if (game.player.laptopOpen && game.lecturerCooldown <= 0) {
             game.player.laptopOpen = false;
             game.mashCount = 0;
-            game.lecturerCooldown = 2; // 2-second cooldown before next close
+            game.lecturerCooldown = 2;
             document.getElementById("message").textContent = "Mash Space (0/5)";
+            // Lecturer retreats
+            const retreatSpot = getRandomEmptySpot();
+            game.lecturer.targetX = retreatSpot.x;
+            game.lecturer.targetY = retreatSpot.y;
         }
     }
 
@@ -149,7 +184,7 @@ document.addEventListener("keydown", (e) => {
             document.getElementById("message").textContent = "Laptop reopened!";
             setTimeout(() => {
                 if (game.player.laptopOpen) document.getElementById("message").textContent = "";
-            }, 1000); // Clear message after 1 second
+            }, 1000);
         }
     }
 
