@@ -5,13 +5,15 @@ const ctx = canvas.getContext("2d");
 // Game state
 let game = {
     player: { x: 2, y: 2, laptopOpen: true },
-    lecturer: { x: 0, y: 0, speed: 0.05 },
+    lecturer: { x: 0, y: 0, speed: 0.02 },
     score: 0,
     timeLeft: 180, // 3 minutes in seconds
     desks: [],
     gameOver: false,
-    npcs: [], // Other students
-    distractionCooldown: 0
+    npcs: [],
+    distractionCooldown: 0,
+    mashCount: 0,
+    lecturerCooldown: 0 // Cooldown after closing laptop
 };
 
 // Grid settings
@@ -32,7 +34,7 @@ game.desks[game.player.y][game.player.x].occupied = true;
 game.npcs = [
     { x: 1, y: 0, laptopOpen: true },
     { x: 4, y: 1, laptopOpen: true },
-    { x: 3, y: 3, laptopOpen: false } // No laptop
+    { x: 3, y: 3, laptopOpen: false }
 ];
 game.npcs.forEach(npc => {
     game.desks[npc.y][npc.x].occupied = true;
@@ -53,7 +55,7 @@ function drawScene() {
 
     // Draw NPCs
     game.npcs.forEach(npc => {
-        ctx.fillStyle = npc.laptopOpen ? "#4caf50" : "#9e9e9e"; // Green if laptop, gray if not
+        ctx.fillStyle = npc.laptopOpen ? "#4caf50" : "#9e9e9e";
         ctx.fillRect(npc.x * TILE_SIZE + 30, npc.y * TILE_SIZE + 30, 40, 40);
     });
 
@@ -68,13 +70,16 @@ function drawScene() {
     // Update UI
     document.getElementById("score").textContent = `Score: ${Math.floor(game.score)}`;
     document.getElementById("time").textContent = `Time: ${Math.ceil(game.timeLeft)}`;
+    if (!game.player.laptopOpen) {
+        document.getElementById("message").textContent = `Mash Space (${game.mashCount}/5)`;
+    }
 }
 
 // Update game state
 function update() {
     if (game.gameOver) return;
 
-    // Lecturer movement (chase player or distracted NPC)
+    // Lecturer movement
     let targetX = game.player.x;
     let targetY = game.player.y;
     if (game.distractionCooldown > 0) {
@@ -93,11 +98,18 @@ function update() {
     if (game.lecturer.y < targetY) game.lecturer.y += game.lecturer.speed;
     if (game.lecturer.y > targetY) game.lecturer.y -= game.lecturer.speed;
 
-    // Lecturer catches player
-    if (Math.abs(game.lecturer.x - game.player.x) < 0.5 && Math.abs(game.lecturer.y - game.player.y) < 0.5) {
-        if (game.player.laptopOpen) {
+    // Lecturer cooldown
+    if (game.lecturerCooldown > 0) {
+        game.lecturerCooldown -= 1 / 60;
+    }
+
+    // Collision check
+    if (Math.abs(game.lecturer.x - game.player.x) < 0.1 && Math.abs(game.lecturer.y - game.player.y) < 0.1) {
+        if (game.player.laptopOpen && game.lecturerCooldown <= 0) {
             game.player.laptopOpen = false;
-            document.getElementById("message").textContent = "Laptop closed! Mash spacebar!";
+            game.mashCount = 0;
+            game.lecturerCooldown = 2; // 2-second cooldown before next close
+            document.getElementById("message").textContent = "Mash Space (0/5)";
         }
     }
 
@@ -111,7 +123,6 @@ function update() {
 }
 
 // Player input
-let mashCount = 0;
 document.addEventListener("keydown", (e) => {
     if (game.gameOver) return;
 
@@ -131,11 +142,14 @@ document.addEventListener("keydown", (e) => {
 
     // Mash to reopen
     if (e.key === " " && !game.player.laptopOpen) {
-        mashCount++;
-        if (mashCount >= 5) {
+        game.mashCount++;
+        if (game.mashCount >= 5) {
             game.player.laptopOpen = true;
-            mashCount = 0;
+            game.mashCount = 0;
             document.getElementById("message").textContent = "Laptop reopened!";
+            setTimeout(() => {
+                if (game.player.laptopOpen) document.getElementById("message").textContent = "";
+            }, 1000); // Clear message after 1 second
         }
     }
 
@@ -143,7 +157,7 @@ document.addEventListener("keydown", (e) => {
     if (e.key === "r" && game.distractionCooldown <= 0) {
         const npcWithLaptop = game.npcs.find(npc => npc.laptopOpen);
         if (npcWithLaptop) {
-            game.distractionCooldown = 5; // 5-second distraction
+            game.distractionCooldown = 5;
             document.getElementById("message").textContent = "Lecturer distracted!";
         }
     }
