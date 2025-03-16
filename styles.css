@@ -16,7 +16,7 @@ body {
     background-color: #8bc34a; /* Chalkboard green-ish */
 }
 
-#score, #time {
+#score, #time, #message {
     position: absolute;
     color: white;
     font-family: Arial, sans-serif;
@@ -31,4 +31,10 @@ body {
 #time {
     top: 10px;
     right: 10px;
+}
+
+#message {
+    bottom: 10px;
+    left: 10px;
+    color: #ffeb3b; /* Yellow for visibility */
 }
